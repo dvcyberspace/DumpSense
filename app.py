@@ -8,7 +8,7 @@ from sqlalchemy.exc import OperationalError
 
 app = Flask(__name__)
 
-app.secret_key = 'your_super_secret_key' 
+app.secret_key = os.environ.get('FLASK_SECRET_KEY') #strong key
 
 # Database Setup
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///database.db'
@@ -240,5 +240,5 @@ def upload_and_classify():
         return redirect(url_for('main'))
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run()
     
