@@ -1,14 +1,21 @@
 {
-    "builds":[
-        {
-            "src": "app.py",
-            "use": "@vercel/python"
-        }
-    ],
-    "routes":[
-        {
-            "src": "/(.*)",
-            "dest": "app.py"
-        }
-    ]
+  "version": 2,
+  "builds": [
+    {
+      "src": "app.py",
+      "use": "@vercel/python"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "app.py"
+    }
+  ],
+  "env": {
+    "GEMINI_API_KEY": "@gemini-api-key",
+    "FLASK_SECRET_KEY": "@flask-secret-key",
+    "SUPABASE_URL": "@supabase-url",
+    "SUPABASE_SERVICE_KEY": "@supabase-service-key"
+  }
 }
