@@ -3,50 +3,25 @@ import requests
 import base64
 from flask import Flask, render_template, request, redirect, session, url_for, flash, send_from_directory
 import uuid
-from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy.exc import OperationalError
+from supabase import create_client, Client
 
 app = Flask(__name__)
 
-app.secret_key = os.environ.get('FLASK_SECRET_KEY') #strong key
+app.secret_key = os.environ.get('FLASK_SECRET_KEY')
 
-# Database Setup
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///database.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-db = SQLAlchemy(app)
+# Supabase configuration from environment variables
+# These environment variables must be set in your Vercel deployment settings.
+SUPABASE_URL: str = os.environ.get("SUPABASE_URL")
+SUPABASE_SERVICE_KEY: str = os.environ.get("SUPABASE_SERVICE_KEY")
+GEMINI_API_KEY: str = os.environ.get("GEMINI_API_KEY") 
 
-# Define the User database model
-class User(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=False)
-    password = db.Column(db.String(120), nullable=False)
-
-    def __repr__(self):
-        return f'<User {self.username}>'
-
-# A helper function to create the database tables.
-def create_tables():
-    """This function is called to create the database tables."""
-    print("Creating database tables...")
-    with app.app_context():
-        db.create_all()
-    print("Database tables created.")
-
-# Directory for saving uploaded images.
-UPLOAD_FOLDER = 'uploads'
-if not os.path.exists(UPLOAD_FOLDER):
-    os.makedirs(UPLOAD_FOLDER)
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
 # Allowed image extensions for validation
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
-
-@app.route('/uploads/<filename>')
-def uploaded_file(filename):
-    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
 @app.route('/')
 @app.route('/home')
@@ -74,7 +49,6 @@ def register_page():
 
 @app.route('/register_user', methods=['POST'])
 def register_user():
-    """Handles new user registration by creating a new User object and saving it."""
     username = request.form.get('username')
     password = request.form.get('password')
 
@@ -82,56 +56,47 @@ def register_user():
         flash("Username and password cannot be empty.", 'error')
         return redirect(url_for('register_page'))
 
-    # try-except block to handle the case where the table doesn't exist yet.
     try:
-        existing_user = User.query.filter_by(username=username).first()
-        if existing_user:
+        # Check if username already exists in the 'user' table
+        # Using the Supabase client to query the 'user' table
+        response = supabase.table('user').select('*').eq('username', username).execute()
+        
+        # The Supabase client returns data in response.data (list of dictionaries)
+        if response.data:
             flash("Username already exists. Please choose a different one.", 'error')
             return redirect(url_for('register_page'))
 
-        # Create a new user object
-        new_user = User(username=username, password=password)
-    
-        # Add the new user to the database session and commit
-        db.session.add(new_user)
-        db.session.commit()
+        # Insert the new user into the 'user' table
+        supabase.table('user').insert({"username": username, "password": password}).execute()
         flash("Registration successful! Please log in.", 'success')
         return redirect(url_for('login_page'))
-    except OperationalError:
-        # If the 'user' table doesn't exist, create it and retry the registration.
-        print("OperationalError caught. Creating tables and retrying registration.")
-        db.session.rollback()
-        create_tables()
-        return register_user() # Rerun the function to complete the registration.
     except Exception as e:
-        db.session.rollback() # Roll back on other errors
-        flash(f"An unexpected error occurred: {e}", 'error')
+        flash(f"An unexpected error occurred during registration: {e}", 'error')
         return redirect(url_for('register_page'))
 
 @app.route('/submit', methods=['POST'])
 def submit():
-    """Handles user login."""
+    #Handles user login by querying the Supabase 'user' table
     username = request.form.get('username')
     password = request.form.get('password') 
     
-    # try-except block to handle the case where the table doesn't exist yet.
     try:
-        # Query the database for a user with the given username and password
-        user = User.query.filter_by(username=username, password=password).first()    
-        if user:
+        # Query the Supabase 'user' table for a user with the given username and password
+        response = supabase.table('user').select('*').eq('username', username).eq('password', password).execute()
+        user_data = response.data
+
+        if user_data:
+            # If user_data is not empty, a user was found
             session['logged_in'] = True
-            session['username'] = user.username
+            session['username'] = user_data[0]['username'] # Get username from the first matching record
             flash("Login successful!", 'success')
             return redirect(url_for('main')) 
         else:
             flash("Invalid credentials. Please try again.", 'error')
             return redirect(url_for('login_page'))
-    except OperationalError:
-        # If the 'user' table doesn't exist, create it and retry the login.
-        print("OperationalError caught. Creating tables and retrying login.")
-        db.session.rollback()
-        create_tables()
-        return submit() # Rerun the function to complete the login.
+    except Exception as e:
+        flash(f"An unexpected error occurred during login: {e}", 'error')
+        return redirect(url_for('login_page'))
 
 @app.route('/logout')
 def logout():
@@ -152,41 +117,45 @@ def main():
 
 @app.route('/upload_and_classify', methods=['POST'])
 def upload_and_classify():
-    """Handles file upload and then calls the Gemini API for classification."""
+    """
+    Handles file upload to Supabase Storage and then calls the Gemini API for classification.
+    """
     if not session.get('logged_in'):
         flash("You must be logged in to upload files.", 'error')
         return redirect(url_for('login_page'))
-    # Check if the file part is in the request
+
     if 'file' not in request.files:
         flash('No file part', 'error')
         return redirect(url_for('main'))
     
     file = request.files['file']
     
-    # If the user does not select a file, the browser submits an empty part without a filename
     if file.filename == '':
         flash('No selected file', 'error')
         return redirect(url_for('main'))
     
     if file and allowed_file(file.filename):
         try:
+            # Generate a unique filename
             filename = str(uuid.uuid4()) + os.path.splitext(file.filename)[1]
-            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            file.save(filepath)
+            
+            # Upload the file directly to Supabase Storage
+            # 'uploads' is your bucket name, 'public/' is a folder within the bucket.
+            # The file.stream.read() ensures the entire file content is sent.
+            supabase.storage.from_('uploads').upload(f"public/{filename}", file.stream.read())
 
-            # Read the image file and encode it to base64
-            with open(filepath, "rb") as image_file:
-                encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
+            # Construct the public URL for the uploaded image
+            image_url = f"{SUPABASE_URL}/storage/v1/object/public/uploads/public/{filename}"
 
-            # Configure the API call to Gemini
-            api_key = "GEMINI_API_KEY"
+            file.seek(0) # Reset file pointer to the beginning before reading again for base64
+            encoded_string = base64.b64encode(file.stream.read()).decode('utf-8')
+
+            api_key = GEMINI_API_KEY 
             headers = {
                 "Content-Type": "application/json",
             }
-            # The prompt for the Gemini model
             prompt = "In not more than 6-8 short & to-the point lines, tell what waste category is this image? Classify it as biodegradable, non-biodegradable, e-waste, hazardous, recyclable and others. Also, give a short, friendly explanation and the right and convenient way to dump it for better waste management. If it's recyclable, suggest convincing ideas for recycling it."
             
-            # The API request payload
             payload = {
                 "contents": [
                     {
@@ -195,8 +164,7 @@ def upload_and_classify():
                             {"text": prompt},
                             {
                                 "inlineData": {
-                                    # MimeType for the API request
-                                    "mimeType": "image/jpeg" if file.filename.lower().endswith(('.jpg', '.jpeg')) else "image/png",
+                                    "mimeType": file.mimetype, # Use the actual mimetype from the uploaded file
                                     "data": encoded_string
                                 }
                             }
@@ -205,7 +173,6 @@ def upload_and_classify():
                 ]
             }
 
-            # The model and URL have been updated to a newer, more stable version.
             url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key={api_key}"
 
             # Make the API call
@@ -217,18 +184,13 @@ def upload_and_classify():
             classification_text = result['candidates'][0]['content']['parts'][0]['text']
 
             # Render a new page with the classification result
+            # Pass the full image_url to the template
             return render_template('classify.html', 
                                    classification=classification_text, 
-                                   image_filename=filename, # Pass the filename to the template
+                                   image_filename=image_url, # Now passing the Supabase image URL
                                    logged_in=session.get('logged_in'), 
                                    username=session.get('username'))
 
-        except OperationalError:
-            # If the 'user' table doesn't exist, create it and retry.
-            db.session.rollback()
-            create_tables()
-            # Retry the function call after creating the tables
-            return upload_and_classify()
         except requests.exceptions.RequestException as e:
             flash(f"An error occurred during API call: {e}", 'error')
             return redirect(url_for('main'))
@@ -238,7 +200,3 @@ def upload_and_classify():
     else:
         flash('Allowed file types are png, jpg, jpeg', 'error')
         return redirect(url_for('main'))
-
-if __name__ == '__main__':
-    app.run()
-    
