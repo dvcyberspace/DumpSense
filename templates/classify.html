@@ -9,7 +9,7 @@
         <!-- Display the uploaded image -->
         {% if image_filename %}
         <div class="image-preview">
-            <img src="{{ url_for('uploaded_file', filename=image_filename) }}" alt="Uploaded Waste Image" />
+            <img src="{{ image_filename }}" alt="Uploaded Waste Image" />
         </div>
         {% endif %}
 
@@ -20,6 +20,7 @@
             <i class="fas fa-arrow-left"></i> Go Back
         </a>
     </div>
+{% endblock %}
 
     <style>
         .result-container {
