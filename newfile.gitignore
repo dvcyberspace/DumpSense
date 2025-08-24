@@ -3,3 +3,5 @@ instance/
 uploads/
 DumpSense/
 .env
+.venv/
+*.pyc
