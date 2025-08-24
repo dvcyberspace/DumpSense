@@ -225,5 +225,5 @@ def upload_and_classify():
         flash('Allowed file types are png, jpg, jpeg', 'error')
         return redirect(url_for('main'))
     
-if __name__ == '__main__':
-    app.run(debug=True)
+# if __name__ == '__main__':
+#     app.run(debug=True)
