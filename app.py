@@ -15,6 +15,9 @@ SUPABASE_URL: str = os.environ.get("SUPABASE_URL")
 SUPABASE_SERVICE_KEY: str = os.environ.get("SUPABASE_SERVICE_KEY")
 GEMINI_API_KEY: str = os.environ.get("GEMINI_API_KEY") 
 
+print(f"SUPABASE_URL: {SUPABASE_URL}")
+print(f"SUPABASE_SERVICE_KEY: {SUPABASE_SERVICE_KEY}")
+
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
 # Allowed image extensions for validation
