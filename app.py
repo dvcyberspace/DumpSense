@@ -6,9 +6,9 @@ import mimetypes
 from flask import Flask, render_template, request, redirect, session, url_for, flash, send_from_directory
 import uuid
 from supabase import create_client, Client
-from dotenv import load_dotenv
-load_dotenv()
-import json
+# from dotenv import load_dotenv
+# load_dotenv()
+# import json
 
 app = Flask(__name__)
 
@@ -19,23 +19,6 @@ app.secret_key = os.environ.get('FLASK_SECRET_KEY')
 SUPABASE_URL: str = os.environ.get("SUPABASE_URL")
 SUPABASE_SERVICE_KEY: str = os.environ.get("SUPABASE_SERVICE_KEY")
 GEMINI_API_KEY: str = os.environ.get("GEMINI_API_KEY")
-
-# class MockSupabaseStorageClient:
-#     def from_(self, uploads):
-#         print(f"Accessing bucket: {uploads}")
-#         self.uploads = uploads
-#         return self
-
-#     def upload(self, path, file_bytes):
-#         print(f"Uploading file to Supabase Storage: {self.uploads}/{path}")
-#         print(f"File size: {len(file_bytes)} bytes")
-#         # In a real scenario, this would interact with Supabase API
-#         # and handle potential errors.
-#         return {"data": {"path": path}} # Mock response
-
-# class MockSupabaseClient:
-#     def __init__(self):
-#         self.storage = MockSupabaseStorageClient()
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_SERVICE_KEY)
 
