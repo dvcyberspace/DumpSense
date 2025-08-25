@@ -1,9 +1,11 @@
 {
-  "build": {
-    "env": {
-      "FLASK_ENV": "production"
+  "version": 2,
+  "builds": [
+    {
+      "src": "api/index.py",
+      "use": "@vercel/python"
     }
-  },
+  ],
   "routes": [
     {
       "src": "/(.*)",
