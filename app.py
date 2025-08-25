@@ -6,9 +6,9 @@ import mimetypes
 from flask import Flask, render_template, request, redirect, session, url_for, flash, send_from_directory
 import uuid
 from supabase import create_client, Client
-# from dotenv import load_dotenv
-# load_dotenv()
-# import json
+from dotenv import load_dotenv
+load_dotenv()
+import json
 
 app = Flask(__name__)
 
